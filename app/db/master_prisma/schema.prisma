@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client-py"
+  output = "prisma"
+  recursive_type_depth = -1
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("MASTER_DB_URL")
+}
+
+model Tenants {
+    id                  String @id @default(uuid()) @db.Uuid
+    companyName         String @map("company_name") @db.VarChar(225)
+    companyId           String @map("company_id") @db.Uuid @unique
+    companyServerName   String @map("company_server_name") @db.VarChar(225) @unique
+    allowedDomains      String[] @map("allowed_domains") @db.VarChar(255) @default([])
+    createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz()
+    updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+    // リレーション
+    slackWorkspaces     SlackWorkspace[]
+    invitationTokens    InvitationToken[]
+
+    @@map("tenants")
+}
+
+model InvitationToken {
+    id            String   @id @default(uuid()) @db.Uuid
+    token         String[] @db.VarChar(64)
+    companyId     String   @map("company_id") @db.Uuid @unique
+    issuedAt      DateTime @default(now()) @map("issued_at") @db.Timestamptz()
+    expiresAt     DateTime @map("expires_at") @db.Timestamptz()
+    used          Boolean  @default(false)
+    createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz()
+    updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+    // リレーション
+    tenant        Tenants  @relation(fields: [companyId], references: [companyId])
+
+    @@map("invitation_tokens")
+}
+
+model SlackWorkspace {
+    id            String   @id @default(uuid()) @db.Uuid
+    tenantId      String   @map("tenant_id") @db.Uuid
+    teamId        String   @map("team_id") @db.VarChar(255) @unique
+    botUserId     String   @map("bot_user_id") @db.VarChar(255)
+    scopes        String[] @db.VarChar(255)  // 付与されたスコープの配列
+    installedAt   DateTime @map("installed_at") @db.Timestamptz
+    lastSyncAt    DateTime? @map("last_sync_at") @db.Timestamptz
+    createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+    updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+    // リレーション
+    tenant        Tenants  @relation(fields: [tenantId], references: [id])
+
+    @@map("slack_workspaces")
+}
+
+model SlackInstallState {
+  id            String   @id @default(uuid()) @db.Uuid
+  companyId     String   @map("company_id") @db.Uuid
+  state         String   @db.VarChar(255)
+  expiresAt     DateTime @map("expires_at") @db.Timestamptz
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([companyId, state])
+  @@map("slack_install_states")
+}

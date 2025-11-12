@@ -1,0 +1,1350 @@
+openapi: "3.0.3"
+info:
+  title: "Inthub Backend API"
+  version: "1.0.0"
+  description: >
+    この仕様書は、FastAPI によるバックエンド実装に対応する API を定義しています。
+    各エンドポイントには、詳細な説明、想定されるエラー(400, 401, 404, 409, 500 など)も記載しています。
+servers:
+  - url: "https://inthub-fjfjehdsc4akamdg.japaneast-01.azurewebsites.net"
+tags:
+  - name: Auth
+    description: "認証関連のエンドポイント"
+  - name: Chat
+    description: "チャットセッションおよびメッセージ関連のエンドポイント"
+  - name: Company
+    description: "企業・テナント・先輩情報関連のエンドポイント"
+  - name: RAG
+    description: "RAG検索関連のエンドポイント"
+  - name: System
+    description: "システムのヘルスチェックなど"
+
+paths:
+  /api/v1/auth/signup/callback:
+    get:
+      tags:
+        - Auth
+      summary: "ユーザー登録（サインアップコールバック）"
+      description: >
+        Azure AD B2C のサインアップ完了後に呼ばれるコールバックエンドポイントです。
+        クエリパラメータに含まれるIDトークンを受け取り、ユーザー属性を抽出して返却します。
+      parameters:
+        - in: query
+          name: code
+          required: true
+          schema:
+            type: string
+          description: "Azure AD B2C のサインアップ完了後に呼ばれるコールバックエンドポイント。クエリパラメータに含まれるIDトークン"
+      responses:
+        '200':
+          description: "ユーザー登録に成功"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignUpResponse"
+        '400':
+          description: "入力不備または必須フィールドの不足"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '500':
+          description: "サーバ内部エラー"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/auth/signin/callback:
+    get:
+      tags:
+        - Auth
+      summary: "ユーザー認証（サインインコールバック）"
+      description: >
+        Azure AD B2C のサインイン完了後に呼ばれるコールバックエンドポイントです。
+        クエリパラメータに含まれるIDトークンを受け取り、ユーザー属性を抽出して返却します。
+      parameters:
+        - in: query
+          name: code
+          required: true
+          schema:
+            type: string
+          description: "Azure AD B2C のサインイン完了後に呼ばれるコールバックエンドポイント。クエリパラメータに含まれるIDトークン"
+      responses:
+        '200':
+          description: "サインインに成功し、アクセストークン等を返却"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignInResponse"
+        '401':
+          description: "認証失敗：無効な資格情報"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '500':
+          description: "サーバ内部エラー"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/chat/sessions:
+    post:
+      tags:
+        - Chat
+      summary: "チャットセッション作成"
+      description: >
+        認証済みユーザーにより新規チャットセッション（チャットルーム）を作成します。  
+        Authorization ヘッダーに Bearer トークンを必須とします。
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatSessionCreateRequest"
+      responses:
+        '200':
+          description: "チャットセッションの作成に成功"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatSessionCreateResponse"
+        '401':
+          description: "認証失敗：無効または不足しているトークン"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '500':
+          description: "サーバ内部エラー"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    get:
+      tags:
+        - Chat
+      summary: "チャットセッション一覧取得"
+      description: >
+        認証済みユーザーのチャットセッション一覧を取得します。  
+        クエリパラメータ status（active, ended）によりフィルタリング可能です。
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [active, ended]
+          description: "チャットセッションのステータス"
+      responses:
+        '200':
+          description: "チャットセッション一覧の取得に成功"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatSessionListResponse"
+        '401':
+          description: "認証失敗：無効または不足しているトークン"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '500':
+          description: "サーバ内部エラー"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/chat/messages:
+    post:
+      tags:
+        - Chat
+      summary: "チャットメッセージ送信"
+      description: >
+        指定されたチャットセッション内で、ユーザーのメッセージを送信します。  
+        送信後、システムによる回答が返却されます。認証済みユーザーのみ利用可能です。
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatMessageSendRequest"
+      responses:
+        '200':
+          description: "チャットメッセージ送信に成功"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatMessageSendResponse"
+        '400':
+          description: "リクエストパラメータが不正"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '401':
+          description: "認証失敗：無効または不足しているトークン"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '404':
+          description: "対象のチャットセッションが存在しない"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '500':
+          description: "サーバ内部エラー"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    get:
+      tags:
+        - Chat
+      summary: "チャットメッセージ一覧取得"
+      description: >
+        指定したチャットセッション ID に紐づく全メッセージを取得します。  
+        クエリパラメータ session_id を必須とし、認証済みユーザーのみアクセス可能です。
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: session_id
+          required: true
+          schema:
+            type: string
+          description: "チャットルームID"
+      responses:
+        '200':
+          description: "チャットメッセージ一覧の取得に成功"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatMessageListResponse"
+        '400':
+          description: "無効な session_id が指定された場合"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '401':
+          description: "認証失敗：無効または不足しているトークン"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '404':
+          description: "チャットセッションが存在しない"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '500':
+          description: "サーバ内部エラー"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/chat/sessions/end:
+    post:
+      tags:
+        - Chat
+      summary: "チャットセッション終了"
+      description: >
+        指定したチャットセッションの状態を "ended" に更新し、セッションを終了します。  
+        認証済みユーザーのみアクセス可能です。
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatSessionEndRequest"
+      responses:
+        '200':
+          description: "チャットセッションの終了に成功"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatSessionEndResponse"
+        '400':
+          description: "リクエストパラメータが不正"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '401':
+          description: "認証失敗：無効または不足しているトークン"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '404':
+          description: "対象のチャットセッションが存在しない"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '500':
+          description: "サーバ内部エラー"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/company:
+    post:
+      tags:
+        - Company
+      summary: "企業登録"
+      description: >
+        新規企業を登録します。  
+        リクエストボディには企業名とサーバー名を含みます。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterCompany"
+      responses:
+        '200':
+          description: "企業登録に成功"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompanyRegisterResponse"
+        '400':
+          description: "入力データが不正"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '409':
+          description: "既に存在する企業"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '500':
+          description: "サーバ内部エラー"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    get:
+      tags:
+        - Company
+      summary: "全テナント情報取得"
+      description: "全てのテナント（企業）情報を取得します。"
+      responses:
+        '200':
+          description: "テナント情報の取得に成功"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TenantListResponse"
+        '500':
+          description: "サーバ内部エラー"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/company/{company_id}:
+    get:
+      tags:
+        - Company
+      summary: "指定企業のテナント情報取得"
+      description: >
+        指定した company_id に対応するテナント情報を取得します。
+      parameters:
+        - in: path
+          name: company_id
+          required: true
+          schema:
+            type: string
+          description: "企業の一意識別子"
+      responses:
+        '200':
+          description: "テナント情報の取得に成功"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TenantInfoResponse"
+        '404':
+          description: "指定した企業が見つからない"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '500':
+          description: "サーバ内部エラー"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/company/update-schemas:
+    post:
+      tags:
+        - Company
+      summary: "全テナントスキーマ更新"
+      description: >
+        全てのテナントデータベースのスキーマを更新します。  
+        実行には時間がかかる可能性があるため注意が必要です。
+      responses:
+        '200':
+          description: "スキーマ更新に成功"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+        '500':
+          description: "サーバ内部エラー"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/company/user/register:
+    post:
+      tags:
+        - Company
+      summary: "企業ユーザー登録"
+      description: >
+        企業ユーザーを登録します。  
+        リクエストボディには所属企業ID、ユーザー名、メールアドレス、ロール、azure_user_id を含みます。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterCompanyUser"
+      responses:
+        '200':
+          description: "企業ユーザー登録に成功"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompanyUserRegisterResponse"
+        '400':
+          description: "入力データが不正"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '409':
+          description: "既に存在するユーザー"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '500':
+          description: "サーバ内部エラー"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/company/{company_id}/senpai/register:
+    post:
+      tags:
+        - Company
+      summary: "先輩登録"
+      description: >
+        指定した企業（company_id）に対して先輩情報（senpai_name と profile）を登録します。
+      parameters:
+        - in: path
+          name: company_id
+          required: true
+          schema:
+            type: string
+          description: "企業の一意識別子"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterSenpaiRequest"
+      responses:
+        '200':
+          description: "先輩情報の登録に成功"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegisterSenpaiResponse"
+        '400':
+          description: "入力データが不正"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '404':
+          description: "指定企業が見つからない"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '500':
+          description: "サーバ内部エラー"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/company/{company_id}/senpai/{senpai_id}:
+    get:
+      tags:
+        - Company
+      summary: "先輩詳細取得"
+      description: >
+        指定した企業と先輩IDに基づいて先輩の詳細情報を取得します。
+      parameters:
+        - in: path
+          name: company_id
+          required: true
+          schema:
+            type: string
+          description: "企業の一意識別子"
+        - in: path
+          name: senpai_id
+          required: true
+          schema:
+            type: string
+          description: "先輩の一意識別子"
+      responses:
+        '200':
+          description: "先輩詳細の取得に成功"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetSenpaiDetailResponse"
+        '404':
+          description: "先輩情報が見つからない"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '500':
+          description: "サーバ内部エラー"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/company/{company_id}/senpai:
+    get:
+      tags:
+        - Company
+      summary: "先輩一覧取得"
+      description: >
+        指定した企業に紐づく全先輩情報の一覧を取得します。
+      parameters:
+        - in: path
+          name: company_id
+          required: true
+          schema:
+            type: string
+          description: "企業の一意識別子"
+      responses:
+        '200':
+          description: "先輩一覧の取得に成功"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SenpaiListResponse"
+        '404':
+          description: "企業または先輩情報が見つからない"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '500':
+          description: "サーバ内部エラー"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/company/{company_id}/data/upload:
+    post:
+      tags:
+        - Company
+      summary: "データアップロード"
+      description: >
+        会社IDを指定して、データをアップロードします。
+      parameters:
+        - in: path
+          name: company_id
+          required: true
+          schema:
+            type: string
+          description: "企業の一意識別子"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: "データアップロードに成功"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadDataResponse"
+        '400':
+          description: "入力データが不正"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '404':
+          description: "指定した企業が見つからない"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '500':
+          description: "サーバ内部エラー"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/company/{company_id}/data/status:
+    get:
+      tags:
+        - Company
+      summary: "ファイルステータス取得"
+      description: >
+        会社IDとファイルIDを指定して、ファイルのステータスを取得します。
+      parameters:
+        - in: path
+          name: company_id
+          required: true
+          schema:
+            type: string
+          description: "企業の一意識別子"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GetFileStatusRequest"
+      responses:
+        '200':
+          description: "ファイルステータスの取得に成功"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileStatusResponse"
+        '400':
+          description: "無効なリクエスト"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '404':
+          description: "ファイルが見つからない"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '500':
+          description: "サーバ内部エラー"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/company/{company_id}/data/delete:
+    delete:
+      tags:
+        - Company
+      summary: "データ削除"
+      description: >
+        会社IDを指定して、データを削除します。
+      parameters:
+        - in: path
+          name: company_id
+          required: true
+          schema:
+            type: string
+          description: "企業の一意識別子"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeleteDataRequest"
+      responses:
+        '200':
+          description: "データ削除に成功"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteDataResponse"
+        '400':
+          description: "無効なリクエスト"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '404':
+          description: "指定した企業またはデータが見つからない"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '500':
+          description: "サーバ内部エラー"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/rag/build-index:
+    post:
+      tags:
+        - RAG
+      summary: "RAGインデックス構築"
+      description: >
+        指定されたファイルIDに基づいてRAGインデックスを構築します。
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BuildIndexRequest"
+      responses:
+        '200':
+          description: "RAGインデックスの構築に成功"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BuildIndexResponse"
+        '400':
+          description: "入力データが不正"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '401':
+          description: "認証失敗：無効または不足しているトークン"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '500':
+          description: "サーバ内部エラー"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/rag/delete-index:
+    delete:
+      tags:
+        - RAG
+      summary: "RAGインデックス削除"
+      description: >
+        現在のテナントに対するRAGインデックスを削除します。
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: "RAGインデックスの削除に成功"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteIndexResponse"
+        '500':
+          description: "サーバ内部エラー"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/rag/query:
+    post:
+      tags:
+        - RAG
+      summary: "RAGクエリ実行"
+      description: >
+        指定されたクエリに基づいてRAG検索を実行し、結果を返却します。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RagQueryRequest"
+      responses:
+        '200':
+          description: "RAGクエリの実行に成功"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RagQueryResponse"
+        '400':
+          description: "入力データが不正"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        '500':
+          description: "サーバ内部エラー"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/system/health:
+    get:
+      tags:
+        - System
+      summary: "ヘルスチェック"
+      description: >
+        システムの稼働状況を確認するためのヘルスチェックを実施します。
+      responses:
+        '200':
+          description: "ヘルスチェックに成功"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthCheckResponse"
+        '500':
+          description: "サーバ内部エラー"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    SignUpRequest:
+      type: object
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+        confirm_password:
+          type: string
+        name:
+          type: string
+        company_id:
+          type: string
+        role:
+          type: string
+      required:
+        - email
+        - password
+        - confirm_password
+        - name
+        - company_id
+        - role
+    SignUpResponse:
+      type: object
+      properties:
+        name:
+          type: string
+        company_id:
+          type: string
+        email:
+          type: string
+        azure_user_id:
+          type: string
+        role:
+          type: string
+      required:
+        - name
+        - company_id
+        - email
+        - azure_user_id
+        - role
+    SignInResponse:
+      type: object
+      properties:
+        name:
+          type: string
+        company_id:
+          type: string
+        access_token:
+          type: string
+        azure_user_id:
+          type: string
+        role:
+          type: string
+        refresh_token:
+          type: string
+      required:
+        - name
+        - company_id
+        - access_token
+        - azure_user_id
+        - role
+        - refresh_token
+    ChatSessionCreateRequest:
+      type: object
+      properties:
+        room_name:
+          type: string
+          nullable: true
+    ChatSessionCreateResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        session_id:
+          type: string
+        message:
+          type: string
+      required:
+        - status
+        - session_id
+        - message
+    ChatMessageSendRequest:
+      type: object
+      properties:
+        session_id:
+          type: string
+        user_message:
+          type: string
+        senpai_id:
+          type: string
+      required:
+        - session_id
+        - user_message
+        - senpai_id
+    ChatMessageSendResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        system_reply:
+          type: string
+        system_score:
+          type: array
+          items:
+            type: number
+      required:
+        - status
+        - system_reply
+        - system_score
+    ChatSessionEndRequest:
+      type: object
+      properties:
+        session_id:
+          type: string
+      required:
+        - session_id
+    ChatSessionEndResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        message:
+          type: string
+      required:
+        - status
+        - message
+    ChatSessionItem:
+      type: object
+      properties:
+        session_id:
+          type: string
+        room_name:
+          type: string
+        status:
+          type: string
+          enum: [active, ended]
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - session_id
+        - room_name
+        - status
+        - created_at
+    ChatSessionListResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        sessions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatSessionItem"
+      required:
+        - status
+        - sessions
+    ChatMessageItem:
+      type: object
+      properties:
+        message_id:
+          type: string
+        content:
+          type: string
+        is_assistant:
+          type: boolean
+        senpai_id:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - message_id
+        - content
+        - is_assistant
+        - created_at
+    ChatMessageListResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        session_id:
+          type: string
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatMessageItem"
+      required:
+        - status
+        - session_id
+        - messages
+    RegisterCompany:
+      type: object
+      properties:
+        company_name:
+          type: string
+        company_server_name:
+          type: string
+      required:
+        - company_name
+        - company_server_name
+    CompanyRegisterResponse:
+      type: object
+      properties:
+        company_id:
+          type: string
+        status:
+          type: string
+        message:
+          type: string
+      required:
+        - company_id
+        - status
+        - message
+    RegisterCompanyUser:
+      type: object
+      properties:
+        company_id:
+          type: string
+        user_name:
+          type: string
+        user_email:
+          type: string
+        user_role:
+          type: string
+        azure_user_id:
+          type: string
+      required:
+        - company_id
+        - user_name
+        - user_email
+        - user_role
+        - azure_user_id
+    CompanyUserRegisterResponse:
+      type: object
+      properties:
+        user_id:
+          type: string
+        status:
+          type: string
+      required:
+        - user_id
+        - status
+    TenantInfoFromTenant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        company_name:
+          type: string
+        company_server_name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - company_name
+        - company_server_name
+        - created_at
+        - updated_at
+    TenantInfoResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        tenant:
+          $ref: "#/components/schemas/TenantInfoFromTenant"
+      required:
+        - status
+        - tenant
+    TenantInfo:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        company_name:
+          type: string
+        company_id:
+          type: string
+          format: uuid
+        company_server_name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - company_name
+        - company_id
+        - company_server_name
+        - created_at
+        - updated_at
+    TenantListResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        tenants:
+          type: array
+          items:
+            $ref: "#/components/schemas/TenantInfo"
+      required:
+        - status
+        - tenants
+    RegisterSenpaiRequest:
+      type: object
+      properties:
+        senpai_name:
+          type: string
+        profile:
+          type: object
+          additionalProperties: true
+      required:
+        - senpai_name
+        - profile
+    RegisterSenpaiResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        message:
+          type: string
+        senpai_id:
+          type: string
+      required:
+        - status
+        - message
+        - senpai_id
+    GetSenpaiDetailResponse:
+      type: object
+      properties:
+        senpai_id:
+          type: string
+        senpai_name:
+          type: string
+        profile:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - senpai_id
+        - senpai_name
+        - profile
+        - created_at
+    SenpaiListResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        senpais:
+          type: array
+          items:
+            $ref: "#/components/schemas/GetSenpaiDetailResponse"
+      required:
+        - status
+        - senpais
+    UploadDataResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        message:
+          type: string
+        fileId:
+          type: string
+      required:
+        - status
+        - message
+        - fileId
+    GetFileStatusRequest:
+      type: object
+      properties:
+        file_id:
+          type: string
+      required:
+        - file_id
+    DeleteDataResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        message:
+          type: string
+      required:
+        - status
+        - message
+    DeleteDataRequest:
+      type: object
+      properties:
+        file_id:
+          type: string
+      required:
+        - file_id
+    FileStatusResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        message:
+          type: string
+    BuildIndexRequest:
+      type: object
+      properties:
+        file_id:
+          type: string
+      required:
+        - file_id
+    BuildIndexResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        message:
+          type: string
+        indexSize:
+          type: integer
+      required:
+        - status
+        - message
+        - indexSize
+    DeleteIndexResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        message:
+          type: string
+      required:
+        - status
+        - message
+    RagQueryRequest:
+      type: object
+      properties:
+        query:
+          type: string
+        indexName:
+          type: string
+        topK:
+          type: integer
+          default: 5
+      required:
+        - query
+        - indexName
+    RagQueryResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        results:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+      required:
+        - status
+        - results
+    HealthCheckResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "ok"
+        message:
+          type: string
+          example: "Service is healthy"
+        uptime:
+          type: number
+          format: float
+          example: 1234.56
+      required:
+        - status
+        - message
+        - uptime
+    ErrorResponse:
+      type: object
+      properties:
+        error_code:
+          type: string
+        error_message:
+          type: string
+        details:
+          type: object
+          nullable: true
+          additionalProperties: true
+      required:
+        - error_code
+        - error_message

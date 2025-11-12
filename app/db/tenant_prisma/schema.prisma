@@ -1,0 +1,171 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-py"
+  output = "prisma"
+  recursive_type_depth = -1
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 企業管理テーブル
+model Company {
+  id              String   @id @default(uuid()) @db.Uuid
+  companyName     String   @map("company_name") @db.VarChar(255)
+  promptTemplate  String   @map("prompt_template") @db.Text  @default("")
+  companyServerName String   @map("company_server_name") @db.VarChar(255) @unique 
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // リレーション
+  users     CompanyUser[]
+  csvFiles  CsvFile[]
+  ragData   RagData[]
+  chatRooms ChatRoom[]
+  seniors   Senior[]
+
+  @@map("companies")
+}
+
+// 企業ユーザ
+model CompanyUser {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String   @map("name") @db.VarChar(255)
+  companyId    String   @map("company_id") @db.Uuid
+  email        String   @db.VarChar(255)
+  azureUserId  String   @map("azure_user_id") @db.VarChar(255)
+  role         String   @db.VarChar(50)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // リレーション
+  company  Company       @relation(fields: [companyId], references: [id])
+  chatRooms ChatRoom[]
+  @@map("company_users")
+}
+
+// csvファイル
+model CsvFile {
+  id         String   @id @default(uuid()) @db.Uuid
+  companyId  String   @map("company_id") @db.Uuid
+  blobUrl    String   @map("blob_url") @db.Text
+  fileName   String   @map("file_name") @db.VarChar(255)
+  size       BigInt
+  status     String   @db.VarChar(255)
+  uploadedAt DateTime @map("uploaded_at") @db.Timestamptz
+
+  // リレーション
+  company Company   @relation(fields: [companyId], references: [id])
+  ragData RagData[]
+
+  @@map("csv_files")
+}
+
+// 前処理後RAGデータ
+model RagData {
+  id         String   @id @default(uuid()) @db.Uuid
+  companyId  String   @map("company_id") @db.Uuid
+  csvFileId  String   @map("csv_file_id") @db.Uuid
+  chunkIndex Int      @map("chunk_index")
+  textChunk  String   @map("text_chunk") @db.Text
+  metadata   Json     @db.JsonB
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // リレーション
+  company Company @relation(fields: [companyId], references: [id])
+  csvFile CsvFile @relation(fields: [csvFileId], references: [id])
+
+  @@map("rag_data")
+}
+
+// チャットルーム管理
+model ChatRoom {
+  id        String   @id @default(uuid()) @db.Uuid
+  companyId String   @map("company_id") @db.Uuid
+  ownerId   String   @map("owner_id") @db.Uuid
+  roomName  String   @map("room_name") @db.VarChar(255)
+  status    String   @db.VarChar(255) @default("active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // リレーション
+  company  Company       @relation(fields: [companyId], references: [id])
+  owner    CompanyUser   @relation(fields: [ownerId], references: [id])
+  messages ChatMessage[]
+
+  @@map("chat_rooms")
+}
+
+// チャットメッセージ
+model ChatMessage {
+  id        String   @id @default(uuid()) @db.Uuid
+  roomId    String   @map("room_id") @db.Uuid
+  isAssistant Boolean @map("is_assistant")
+  senpaiId  String?   @map("senpai_id") @db.Uuid
+  content   String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  metadata  Json?    @db.JsonB
+
+  // リレーション
+  room   ChatRoom    @relation(fields: [roomId], references: [id])
+  senpai Senior? @relation(fields: [senpaiId], references: [id])
+  @@map("chat_messages")
+}
+
+// 先輩
+model Senior {
+  id        String   @id @default(uuid()) @db.Uuid
+  companyId String   @map("company_id") @db.Uuid
+  name      String   @db.VarChar(255)
+  profile   Json     @db.JsonB
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // リレーション
+  company Company @relation(fields: [companyId], references: [id])
+  messages ChatMessage[]
+
+  @@map("seniors")
+}
+
+// Slackチャンネル情報
+model SlackChannel {
+  id            String   @id @default(uuid()) @db.Uuid
+  workspaceId   String   @map("workspace_id") @db.Uuid
+  channelId     String   @map("channel_id") @db.VarChar(255)
+  name          String   @db.VarChar(255)
+  isPrivate     Boolean  @map("is_private") @default(false)
+  isArchived    Boolean  @map("is_archived") @default(false)
+  lastSyncAt    DateTime? @map("last_sync_at") @db.Timestamptz
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // リレーション
+  messages      SlackMessage[]
+
+  @@unique([workspaceId, channelId])
+  @@map("slack_channels")
+}
+
+// Slackメッセージ
+model SlackMessage {
+  id            String   @id @default(uuid()) @db.Uuid
+  channelId     String   @map("channel_id") @db.Uuid
+  messageTs     String   @map("message_ts") @db.VarChar(255)
+  userId        String   @map("user_id") @db.VarChar(255)
+  text          String   @db.Text
+  threadTs      String?  @map("thread_ts") @db.VarChar(255)
+  isThreadRoot  Boolean  @map("is_thread_root") @default(false)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // リレーション
+  channel       SlackChannel @relation(fields: [channelId], references: [id])
+
+  @@unique([channelId, messageTs])
+  @@map("slack_messages")
+}

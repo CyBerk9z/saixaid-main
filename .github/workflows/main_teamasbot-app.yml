@@ -1,0 +1,44 @@
+# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
+# More GitHub Actions for Azure: https://github.com/Azure/actions
+# More info on Python, GitHub Actions, and Azure App Service: https://aka.ms/python-webapps-actions
+
+name: Build and deploy Python app to Azure Web App - teamasbot-app (Docker)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # Required for Azure login
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_81E5390125EF416BB28974A7AC71C8BF }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_A90F686348AC42C49CA3BCCA2EA4230E }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_D3CD9017922349F9951B3089349483A0 }}
+
+      - name: Build and push Docker image to ACR
+        id: build-image
+        run: |
+          # Login to Azure Container Registry
+          az acr login --name teamasbotregistry
+
+          # Build the Docker image
+          docker build --no-cache --file dockerfile --tag teamasbotregistry.azurecr.io/app:${{ github.run_number }} .
+
+          # Push the Docker image to ACR
+          docker push teamasbotregistry.azurecr.io/app:${{ github.run_number }}
+
+      # The App Service is configured for continuous deployment,
+      # so pushing to ACR will automatically trigger the App Service update.
+      # No explicit deploy step needed here.

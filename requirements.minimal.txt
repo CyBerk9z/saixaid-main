@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+pydantic-settings
+botbuilder-core==4.16.0
+botbuilder-schema==4.16.0
+aiohttp

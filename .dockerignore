@@ -1,0 +1,39 @@
+# Git 関連ファイル
+.git
+.gitignore
+
+# Python のバイトコードやキャッシュ
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+
+# 仮想環境ディレクトリ
+env/
+venv/
+
+# Dockerfile 自身（必要に応じて）
+Dockerfile*
+.dockerignore
+
+# エディタやIDEの設定ファイル
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# ログファイル
+*.log
+
+# ビルド成果物
+build/
+dist/
+*.egg-info/
+
+# テスト関連
+tests/
+
+# スクリプト関連
+scripts/
+
+connection.txt
