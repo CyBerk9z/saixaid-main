@@ -8,8 +8,13 @@ from botbuilder.core import (
     MessageFactory,
     BotFrameworkAdapter,
 )
-from botbuilder.core.authentication import (
+from botbuilder.core import (
+    TurnContext,
+    MessageFactory,
+    BotFrameworkAdapter,
     BotFrameworkAdapterSettings,
+)
+from botframework.connector.auth import (
     JwtTokenValidation,
     SimpleCredentialProvider,
 )
@@ -21,14 +26,12 @@ from app.services.rag.rag_service import RagService # RAGサービスをイン�
 
 logger = get_logger(__name__)
 
-# Bot Frameworkの認証設定
-CREDENTIAL_PROVIDER = SimpleCredentialProvider(
-    app_id=settings.MICROSOFT_APP_ID,
-    app_password=settings.MICROSOFT_APP_PASSWORD
-)
-
 # Bot Framework Adapterの設定
-ADAPTER = BotFrameworkAdapter(CREDENTIAL_PROVIDER)
+SETTINGS = BotFrameworkAdapterSettings(
+    app_id=settings.MICROSOFT_APP_ID,
+    app_password=settings.MICROSOFT_APP_PASSWORD,
+)
+ADAPTER = BotFrameworkAdapter(SETTINGS)
 
 class TeamsService:
     @staticmethod

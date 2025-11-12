@@ -14,7 +14,10 @@ from app.api.v1.teams.router import router as teams_router
 from app.api.v1.meeting.router import router as meeting_router
 from app.core.exceptions import AppException, handle_app_exception, handle_unexpected_exception
 from app.core.logging import get_logger, set_up_logging
+from dotenv import load_dotenv
 
+# .envファイルを読み込む
+load_dotenv()
 
 # ロガーの設定
 logger = get_logger(__name__)
